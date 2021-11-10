@@ -15,8 +15,6 @@
 #define QtddSensorDist 8
 
 static WbDeviceTag motorE, motorD;
-//static WbDeviceTag sensorDist[QtddSensorDist];
-//static double sensorDist_Valor[QtddSensorDist];
 
 static WbDeviceTag groundE, groundD;
 static double groundE_Valor, groundD_Valor;
@@ -24,7 +22,6 @@ static double groundE_Valor, groundD_Valor;
 #define LEFT 0
 #define RIGHT 1
 #define MAX_SPEED 3.14
-//static double weights[QtddSensorDist][2] = {{-1.3, -1.0},{-1.3, -1.0},{-0.5, 0.5},{0.0, 0.0},{0.0, 0.0},{0.05, -0.5},{-0.75, 0},{-0.75, 0}};
 
 static double offset = 0.5 * MAX_SPEED;
 
@@ -51,8 +48,8 @@ void robot_wait(double seconds) {
  * "controllerArgs" field of the Robot node
  */
 int main(int argc, char **argv) {
-  int i,j;
   double Velocidades[2];
+  bool speed_set = false;
   
   /* necessary to initialize webots stuff */
   wb_robot_init();
@@ -73,33 +70,6 @@ int main(int argc, char **argv) {
   wb_motor_set_velocity(motorE, 0);
   wb_motor_set_velocity(motorD, 0);
   
-  /*
-  //SENSORES
-  sensorDist[0] = wb_robot_get_device("ps0");
-  sensorDist[1] = wb_robot_get_device("ps1");
-  sensorDist[2] = wb_robot_get_device("ps2");
-  sensorDist[3] = wb_robot_get_device("ps3");
-  sensorDist[4] = wb_robot_get_device("ps4");
-  sensorDist[5] = wb_robot_get_device("ps5");
-  sensorDist[6] = wb_robot_get_device("ps6");
-  sensorDist[7] = wb_robot_get_device("ps7");
-  
-  for(i=0;i<QtddSensorDist;i++)
-    wb_distance_sensor_enable(sensorDist[i], get_time_step());
-  */  
-
-  /*
-  //POSIÇÃO ROBO
-  //ATENÇÃO -> NÃO ESQUEÇA DE HABILITAR O SUPERVISOR *E* NOMEAR (DEF) O ROBO!
-  WbNodeRef robot_node = wb_supervisor_node_get_from_def("e-Puck");
-  if (robot_node == NULL) {
-    fprintf(stderr, "No DEF ePuck node found in the current world file\n");
-    exit(1);
-  }
-  WbFieldRef trans_field = wb_supervisor_node_get_field(robot_node, "translation");
-  const double *posicao_robo;
-  */
-  
   //sensor de solo  
   groundE = wb_robot_get_device("IR0");
   groundD = wb_robot_get_device("IR1");
@@ -118,25 +88,6 @@ int main(int argc, char **argv) {
      *  double val = wb_distance_sensor_get_value(my_sensor);
      */
 
-    /*
-    for (i = 0; i < QtddSensorDist; i++)
-      sensorDist_Valor[i] = wb_distance_sensor_get_value(sensorDist[i])/4096;
-    */
-
-    /*    
-    for (i = 0; i < 2; i++) {
-      Velocidades[i] = 0.0;
-      for (j = 0; j < QtddSensorDist; j++)
-        Velocidades[i] += sensorDist_Valor[j] * weights[j][i];
-   
-      Velocidades[i] = offsets[i] + (Velocidades[i] * MAX_SPEED) +  ((double)rand()/RAND_MAX-.5);
-      if (Velocidades[i] > MAX_SPEED)
-        Velocidades[i] = MAX_SPEED;
-      else if (Velocidades[i] < -MAX_SPEED)
-        Velocidades[i] = -MAX_SPEED;
-    }
-    */
-
     groundE_Valor = wb_distance_sensor_get_value(groundE);
     groundD_Valor = wb_distance_sensor_get_value(groundD);
 
@@ -150,51 +101,45 @@ int main(int argc, char **argv) {
     
     printf("left ratio: %.2f\n", left_ratio);
     
-    Velocidades[LEFT]  = offset * right_ratio;
-    Velocidades[RIGHT] = offset * left_ratio;
     
     // turn left
     if (left_ratio > 0.1) {
+      Velocidades[LEFT]  = offset * right_ratio;
+      Velocidades[RIGHT] = offset * left_ratio;
+      speed_set = true;
+      
       Velocidades[LEFT] = 0.0;
       Velocidades[RIGHT] += offset;
     }
     // turn right
     else if (right_ratio > 0.1){
+      Velocidades[LEFT]  = offset * right_ratio;
+      Velocidades[RIGHT] = offset * left_ratio;
+      speed_set = true;
+    
       Velocidades[LEFT] += offset;
       Velocidades[RIGHT] = 0.0;
     }
-    else {
+    else if (ground_Sum > 7.75) {
+      Velocidades[LEFT]  = offset * right_ratio;
+      Velocidades[RIGHT] = offset * left_ratio;
+      speed_set = true;
+      
       Velocidades[LEFT] += offset;
       Velocidades[RIGHT] += offset;    
     }
-    /*
-    // go backward
-    else if (ground_Sum < 7.5) {
-      double temp = Velocidades[LEFT];
-      Velocidades[LEFT]  = -Velocidades[RIGHT];
-      Velocidades[RIGHT] = -temp;
+    else {
+      // avoid adding to uninitialized speed
+      if (!speed_set) {
+        Velocidades[LEFT]  = 0.0;
+        Velocidades[RIGHT] = 0.0;
+        speed_set = true;
+      }
+      // always increase speed to widen curve radius
+      Velocidades[LEFT] += offset;
+      Velocidades[RIGHT] = 0.0;
     }
-    */
-     
-    /*
-    for (i = 0; i < 2; i++) {
-      Velocidades[i] = 0.0;
-      for (j = 0; j < QtddSensorGround; j++)
-        Velocidades[i] += sensorGround_Valor[j] * gWeights[j][i] / sensorGround_sum;
-    
-      //Velocidades[i] = offsets[i] + (Velocidades[i] * MAX_SPEED) +  ((double)rand()/RAND_MAX-.5);
-      Velocidades[i] = Velocidades[i] * MAX_SPEED;
-    
-      if (Velocidades[i] > MAX_SPEED)
-        Velocidades[i] = MAX_SPEED;
-      else if (Velocidades[i] < -MAX_SPEED)
-        Velocidades[i] = -MAX_SPEED;
-    }
-    */
   
-    //posicao_robo = wb_supervisor_field_get_sf_vec3f(trans_field);
-    
-    
     /* Process sensor data here */
 
     /*
@@ -206,10 +151,8 @@ int main(int argc, char **argv) {
     
     robot_wait(0.25);
  
-    //posicao_Caixa1 = wb_supervisor_field_get_sf_vec3f(Caixa1_field);
     printf("Velocidades:  %6.2f  %6.2f |",
         Velocidades[LEFT], Velocidades[RIGHT]); 
-    //printf("Posição Robo: %6.2f  %6.2f |",posicao_robo[0], posicao_robo[2]);
     printf("Sensores de Pista: Esq:%6.2f\tDir:%6.2f\n",
         groundE_Valor, groundD_Valor);
   }
